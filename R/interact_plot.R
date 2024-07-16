@@ -325,7 +325,7 @@
 #' @import rlang
 #' @export interact_plot
 
-interact_plot <- function(model, pred, modx, modx.values = NULL, mod2 = NULL,
+interact_plot <- function(model, pred, modx, resp = NULL, saturation_level = NULL, modx.values = NULL, mod2 = NULL,
                           mod2.values = NULL, centered = "all", data = NULL,
                           at = NULL,
                           plot.points = FALSE, interval = FALSE,
@@ -417,7 +417,7 @@ interact_plot <- function(model, pred, modx, modx.values = NULL, mod2 = NULL,
     mod2.labels <- names(mod2.values)
   }
 
-  pred_out <- prep_data(model = model, pred = pred, modx = modx,
+  pred_out <- prep_data(model = model, pred = pred, resp = resp, saturation_level = saturation_level, modx = modx,
                         modx.values = modx.values, mod2 = mod2,
                         mod2.values = mod2.values, centered = centered,
                         interval = interval, int.type = int.type,

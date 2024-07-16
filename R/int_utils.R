@@ -568,7 +568,7 @@ values_checks <- function(pred.values = NULL, modx.values, mod2.values) {
 
 #' @importFrom stats as.formula complete.cases df.residual model.frame pt
 #' @importFrom stats residuals terms weighted.mean
-prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL,
+prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL, saturation_level = NULL, resp = NULL,
                       modx.values, mod2.values, survey, pred.labels = NULL,
                       modx.labels, mod2.labels, wname, weights,
                       linearity.check, interval, set.offset, facvars, centered,
@@ -622,7 +622,16 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL,
   formula <- get_formula(model, ...)
 
   # Pulling the name of the response variable for labeling
-  resp <- jtools::get_response_name(model, ...)
+  if(is.null(resp)) resp <- jtools::get_response_name(model, ...)
+
+  if(!is.null(saturation_level)){
+    resp_trans <- as.character(deparse(formula[[2]]))
+    if(saturation_level == 0){ 
+      inverse_trans <- function(x) exp(x)
+    }else{
+      inverse_trans <- function(x) saturation_level - exp(x)
+    }
+  }
 
   # Create a design object
   design <- if (inherits(model, "svyglm")) {
@@ -748,7 +757,10 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL,
         model = model, data = d, pred = pred, pred.values = pred.predicted,
         at = at_list, set.offset = set.offset, center = centered,
         interval = interval, outcome.scale = outcome.scale, ...
-    )})
+    ) %>% 
+    {if(!is.null(saturation_level)) mutate(.,"{resp}" := inverse_trans(!!sym(resp_trans)),
+    ymin = inverse_trans(ymin),
+    ymax = inverse_trans(ymax))}})
     # only looking for completeness in these variables
     check_vars <- all.vars(get_formula(model, ...)) %just% names(pms[[i]])
     pms[[i]] <-

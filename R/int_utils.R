@@ -571,9 +571,12 @@ values_checks <- function(pred.values = NULL, modx.values, mod2.values) {
 prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL, saturation_level = NULL, resp = NULL,
                       modx.values, mod2.values, survey, pred.labels = NULL,
                       modx.labels, mod2.labels, wname, weights,
-                      linearity.check, interval, set.offset, facvars, centered,
+                      linearity.check, robust = FALSE,
+                      cluster = NULL,
+                      vcov = NULL,
+                      interval, set.offset, facvars, centered,
                       preds.per.level, force.cat = FALSE, facet.modx = FALSE,
-                      partial.residuals = FALSE, outcome.scale, at, ...) {
+                      partial.residuals = FALSE, outcome.scale, at, restrict_lines_data = FALSE, no_line_insignificant = FALSE, verbose = FALSE,  ...) {
   # offset?
   offname <- jtools::get_offset_name(model)
   off <- !is.null(offname)
@@ -744,6 +747,12 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL, saturation
     at_list <- list()
     if (!is.null(modx)) {
       at_list[[modx]] <- combos[i, modx]
+      if(restrict_lines_data) {
+        slack = 0.03*(max(d[d[[modx]] == combos[i, modx],][[pred]], na.rm = TRUE) - min(d[d[[modx]] == combos[i, modx],][[pred]], na.rm = TRUE))
+        pred.predicted <- seq(from = max(min(d[[pred]], na.rm = TRUE), min(d[d[[modx]] == combos[i, modx],][[pred]], na.rm = TRUE) - slack),
+                              to = min(max(d[[pred]], na.rm = TRUE), max(d[d[[modx]] == combos[i, modx],][[pred]], na.rm = TRUE) + slack),
+                              length.out = preds.per.level)
+      }
     }
     if (!is.null(mod2)) {
       at_list[[mod2]] <- combos[i, mod2]
@@ -756,11 +765,15 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL, saturation
     suppressMessages({pms[[i]] <- jtools::make_predictions(
         model = model, data = d, pred = pred, pred.values = pred.predicted,
         at = at_list, set.offset = set.offset, center = centered,
-        interval = interval, outcome.scale = outcome.scale, ...
-    ) %>% 
-    {if(!is.null(saturation_level)) mutate(.,"{resp}" := inverse_trans(!!sym(resp_trans)),
-    ymin = inverse_trans(ymin),
-    ymax = inverse_trans(ymax))}})
+        interval = interval, outcome.scale = outcome.scale, robust = robust,
+        cluster = cluster,
+        vcov = vcov, ...
+    ) 
+    if(!is.null(saturation_level)){
+      pms[[i]] <-  pms[[i]] %>% mutate(.,"{resp}" := inverse_trans(!!sym(resp_trans)),
+                                       ymin = inverse_trans(ymin),
+                                       ymax = inverse_trans(ymax))}})
+     
     # only looking for completeness in these variables
     check_vars <- all.vars(get_formula(model, ...)) %just% names(pms[[i]])
     pms[[i]] <-
@@ -772,6 +785,22 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL, saturation
   }
 
   pm <- do.call("rbind", pms)
+  
+  
+  if(verbose){
+    print(head(pm))
+  } 
+  
+    # kick out predictions for those groups where the effect of the predictor is insignificant
+  if(no_line_insignificant){
+    insignificant_groups <- get_insignificant_groups(obj = model, pred = as_name(pred), categorical_moderator = modx, levels = modx.values, vcov = vcov, alpha = 0.05)
+    pm <- pm %>% filter(!(!!sym(modx) %in% insignificant_groups))
+    
+  }
+
+  if(verbose){
+    print(pm)
+  } 
 
   # Do partial residuals if requested
   if (partial.residuals == TRUE) {
@@ -823,6 +852,7 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL, saturation
 
   }
 
+  
   # Dealing with transformations of the dependent variable
   # Have to make sure not to confuse situations with brmsfit objects and
   # distributional DVs
@@ -830,6 +860,8 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL, saturation
     trans_name <- as.character(deparse(formula[[2]]))
     d[[trans_name]] <- eval(formula[[2]], d)
   }
+  
+
 
   out <- list(predicted = pm, original = d)
   out <- structure(out, resp = resp, facmod = facmod,
@@ -936,42 +968,4 @@ drop_factor_levels <- function(d, var, values, labels) {
 }
 
 
-# get_contrasts <- function(model) {
-#   form <- as.formula(formula(model))
-#   as.data.frame(t(attr(terms(form), "factors")))
-# }
-#
-# get_int_term <- function(model, vars) {
-#   cons <- get_contrasts(model)
-#   # Check for non-syntactic names
-#   vars <- sapply(vars, bt_if_needed)
-#   cons_vars <- rowMeans(cons[, vars])
-#   matches <- names(cons_vars %just% 1)
-#
-#   if (length(matches) == 1) {
-#     return(matches)
-#   } else {
-#     # nasty hack but I think it works; trying to isolate lowest-order match
-#     lengths <- nchar(matches)
-#     return(matches[which(matches == min(lengths))])
-#   }
-# }
-#
-# threeway_contrasts_continuous <- function(model, pred, modx, mod2, modx.values,
-#                                           mod2.values, .vcov) {
-#   # Get all term labels
-#   b1_term <- pred
-#   b2_term <- modx
-#   b3_term <- mod2
-#   b4_term <- get_int_term(model, c(pred, modx))
-#   b5_term <- get_int_term(model, c(pred, mod2))
-#   b6_term <- get_int_term(model, c(modx, mod2))
-#   b7_term <- get_int_term(model, c(pred, modx, mod2))
-#
-#   # TODO: deal with this
-#   combos <- expand.grid(mod2.values, modx.values)
-#   names(combos) <- c(mod2, modx)
-#
-#   get_delta <- function(b1, b2, b3, b4, b5, b6, b7, w1, z1, w2, z2) {}
-#
-# }
+

@@ -342,7 +342,11 @@ interact_plot <- function(model, pred, modx, resp = NULL, saturation_level = NUL
                           point.size = 1.5, point.shape = FALSE,
                           jitter = 0, rug = FALSE, rug.sides = "b",
                           partial.residuals = FALSE, point.alpha = 0.6,
-                          color.class = NULL,  ...) {
+                          color.class = NULL,
+                          restrict_lines_data = FALSE,
+                          no_line_insignificant = FALSE,
+                          verbose = FALSE,  ...) {
+  
 
   # Capture extra arguments
   dots <- list(...)
@@ -386,7 +390,7 @@ interact_plot <- function(model, pred, modx, resp = NULL, saturation_level = NUL
   }
 
   # Defining "global variables" for CRAN
-  modxvals2 <- mod2vals2 <- resp <- NULL
+  modxvals2 <- mod2vals2 <- NULL
 
   # Change facet.modx to TRUE if linearity.check is TRUE
   if (linearity.check == TRUE) {facet.modx <- TRUE}
@@ -428,7 +432,7 @@ interact_plot <- function(model, pred, modx, resp = NULL, saturation_level = NUL
                         facet.modx = facet.modx, d = d,
                         survey = "svyglm" %in% class(model), weights = weights,
                         preds.per.level = 100,
-                        partial.residuals = partial.residuals, at = at, ...)
+                        partial.residuals = partial.residuals, at = at, restrict_lines_data = restrict_lines_data, no_line_insignificant = no_line_insignificant, verbose = verbose, ...)
 
   # These are the variables created in the helper functions
   meta <- attributes(pred_out)
@@ -477,8 +481,8 @@ interact_plot <- function(model, pred, modx, resp = NULL, saturation_level = NUL
     # predictor even in the "normal" environment).
   } else {
     # Send to internal plotting function
-    plot_mod_continuous(predictions = pm, pred = pred, modx = modx, resp = resp,
-                        mod2 = mod2, data = d,
+    plot_mod_continuous(model = model, predictions = pm, pred = pred, modx = modx, modx.values = modx.values, resp = resp,
+                        mod2 = mod2, data = d, vcov = vcov,
                         plot.points = plot.points | partial.residuals,
                         interval = interval, linearity.check = linearity.check,
                         x.label = x.label, y.label = y.label,
@@ -490,14 +494,16 @@ interact_plot <- function(model, pred, modx, resp = NULL, saturation_level = NUL
                         modxvals2 = modxvals2, mod2vals2 = mod2vals2,
                         weights = weights, rug = rug, rug.sides = rug.sides,
                         point.size = point.size, point.shape = point.shape,
-                        facet.modx = facet.modx, point.alpha = point.alpha)
+                        facet.modx = facet.modx, point.alpha = point.alpha,
+                        no_line_insignificant = no_line_insignificant)
   }
 
 }
 
 # Workhorse plotting function
-plot_mod_continuous <- function(predictions, pred, modx, resp, mod2 = NULL,
-                                data = NULL, plot.points = FALSE,
+plot_mod_continuous <- function(model, predictions, pred, modx, modx.values, resp, mod2 = NULL,
+                                data = NULL, vcov = NULL,
+                                plot.points = FALSE,
                                 interval = FALSE, linearity.check = FALSE,
                                 x.label = NULL, y.label = NULL,
                                 pred.labels = NULL, modx.labels = NULL,
@@ -508,7 +514,8 @@ plot_mod_continuous <- function(predictions, pred, modx, resp, mod2 = NULL,
                                 mod2vals2 = NULL, weights = NULL, rug = FALSE,
                                 rug.sides = "b",
                                 point.shape = FALSE, point.size = 2,
-                                facet.modx = FALSE, point.alpha = 0.6) {
+                                facet.modx = FALSE, point.alpha = 0.6,
+                                no_line_insignificant=FALSE) {
 
   d <- data
   pm <- predictions
@@ -592,8 +599,10 @@ plot_mod_continuous <- function(predictions, pred, modx, resp, mod2 = NULL,
 
   p <- ggplot(pm, aes(x = !! pred, y = !! resp, colour = !! modx,
                       group = !! grp, linetype = !! lty))
+  
+  
 
-  p <- p + geom_path(linewidth = line.thickness, show.legend = !facet.modx)
+  p <- p + geom_path(data = pm, linewidth = line.thickness, show.legend = !facet.modx)
 
   # Plot intervals if requested
   if (interval == TRUE) {
@@ -754,3 +763,8 @@ plot_mod_continuous <- function(predictions, pred, modx, resp, mod2 = NULL,
   return(p)
 
 }
+
+
+
+
+

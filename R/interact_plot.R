@@ -344,7 +344,8 @@ interact_plot <- function(model, pred, modx, resp = NULL, saturation_level = NUL
                           partial.residuals = FALSE, point.alpha = 0.6,
                           color.class = NULL,
                           restrict_lines_data = FALSE,
-                          no_line_insignificant = FALSE,
+                          insignificant_lines = "normal",
+                          show_guide_line = TRUE,
                           verbose = FALSE,  ...) {
   
 
@@ -432,7 +433,7 @@ interact_plot <- function(model, pred, modx, resp = NULL, saturation_level = NUL
                         facet.modx = facet.modx, d = d,
                         survey = "svyglm" %in% class(model), weights = weights,
                         preds.per.level = 100,
-                        partial.residuals = partial.residuals, at = at, restrict_lines_data = restrict_lines_data, no_line_insignificant = no_line_insignificant, verbose = verbose, ...)
+                        partial.residuals = partial.residuals, at = at, restrict_lines_data = restrict_lines_data, insignificant_lines = insignificant_lines, verbose = verbose, ...)
 
   # These are the variables created in the helper functions
   meta <- attributes(pred_out)
@@ -495,7 +496,8 @@ interact_plot <- function(model, pred, modx, resp = NULL, saturation_level = NUL
                         weights = weights, rug = rug, rug.sides = rug.sides,
                         point.size = point.size, point.shape = point.shape,
                         facet.modx = facet.modx, point.alpha = point.alpha,
-                        no_line_insignificant = no_line_insignificant)
+                        insignificant_lines = insignificant_lines, show_guide_line = show_guide_line,
+                        verbose = verbose)
   }
 
 }
@@ -515,7 +517,9 @@ plot_mod_continuous <- function(model, predictions, pred, modx, modx.values, res
                                 rug.sides = "b",
                                 point.shape = FALSE, point.size = 2,
                                 facet.modx = FALSE, point.alpha = 0.6,
-                                no_line_insignificant=FALSE) {
+                                insignificant_lines="normal", 
+                                show_guide_line = TRUE,
+                                verbose = FALSE) {
 
   d <- data
   pm <- predictions
@@ -591,8 +595,11 @@ plot_mod_continuous <- function(model, predictions, pred, modx, modx.values, res
   if (!is.null(modx)) {modx <- sym(modx)}
   if (!is.null(mod2)) {mod2 <- sym(mod2)}
   if (!is.null(weights)) {weights <- sym(weights)}
+  
+  if(verbose) print(pm)
 
-  lty <- if (vary.lty) sym("modx_group") else NULL
+  lty <- if (vary.lty) sym("modx_group") else{ if (insignificant_lines == "dashed") sym("significance_line") else NULL}
+  if(verbose) print(lty)
   # Don't use 'modx_group' if I don't have to since it makes it harder for
   # users to make changes after the fact
   grp <- if (vary.lty | facet.modx) sym("modx_group") else modx
@@ -602,7 +609,9 @@ plot_mod_continuous <- function(model, predictions, pred, modx, modx.values, res
   
   
 
-  p <- p + geom_path(data = pm, linewidth = line.thickness, show.legend = !facet.modx)
+  if(insignificant_lines == "dashed"){
+    p <- p + geom_path(data = pm, mapping = aes(linewidth = !!lty), show.legend = !facet.modx, show_guide = show_guide_line)
+  } else p <- p + geom_path(data = pm, linewidth = line.thickness, show.legend = !facet.modx, show_guide = show_guide_line)
 
   # Plot intervals if requested
   if (interval == TRUE) {
@@ -682,7 +691,7 @@ plot_mod_continuous <- function(model, predictions, pred, modx, modx.values, res
     }
     # Need to use layer function to programmatically define constant aesthetics
     p <- p + layer(geom = "point", data = d, stat = "identity",
-                   inherit.aes = TRUE, show.legend = show_legend,
+                   inherit.aes = FALSE, show.legend = show_legend,
                    mapping = aes(x = !! pred, y = !! resp, size = !! weights,
                                  group = !! grp, colour = !! modx,
                                  shape = !! shape_arg),
@@ -754,11 +763,27 @@ plot_mod_continuous <- function(model, predictions, pred, modx, modx.values, res
     # Need some extra width to show the linetype pattern fully
     p <- p + theme(legend.key.width = grid::unit(3, "lines"))
   }
+  
+  if(insignificant_lines == "dashed"){
+    p <- p + scale_linetype_manual(name = "Significance of effect", values = c("solid","21"),
+                                   breaks = c("significant", "insignificant"),
+                                   labels = c("Significant", "Insignificant"),
+                                   na.value = "blank") +
+      scale_linewidth_manual(name = "Significance of effect", values = c(line.thickness,0.75*line.thickness),
+                             breaks = c("significant", "insignificant"),
+                             labels = c("Significant", "Insignificant"),
+                             na.value = "blank")
+  }
 
   # Give the plot the user-specified title if there is one
   if (!is.null(main.title)) {
     p <- p + ggtitle(main.title)
   }
+  
+  # make sure the legend lines have correct size
+  p <- p + guides(color = guide_legend(override.aes = list(linewidth = line.thickness, size = point.size*1.2)),
+                  #fill = guide_legend(override.aes = list(linewidth = line.thickness)),
+                  linewidth = FALSE) 
 
   return(p)
 

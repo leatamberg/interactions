@@ -576,7 +576,7 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL, saturation
                       vcov = NULL,
                       interval, set.offset, facvars, centered,
                       preds.per.level, force.cat = FALSE, facet.modx = FALSE,
-                      partial.residuals = FALSE, outcome.scale, at, restrict_lines_data = FALSE, no_line_insignificant = FALSE, verbose = FALSE,  ...) {
+                      partial.residuals = FALSE, outcome.scale, at, restrict_lines_data = FALSE, insignificant_lines = "normal", verbose = FALSE,  ...) {
   # offset?
   offname <- jtools::get_offset_name(model)
   off <- !is.null(offname)
@@ -792,10 +792,10 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL, saturation
   } 
   
     # kick out predictions for those groups where the effect of the predictor is insignificant
-  if(no_line_insignificant){
+  if(insignificant_lines != "normal"){
     insignificant_groups <- get_insignificant_groups(obj = model, pred = as_name(pred), categorical_moderator = modx, levels = modx.values, vcov = vcov, alpha = 0.05)
-    pm <- pm %>% filter(!(!!sym(modx) %in% insignificant_groups))
-    
+    if(insignificant_lines == "remove") pm <- pm %>% filter(!(!!sym(modx) %in% insignificant_groups))
+    if(insignificant_lines == "dashed") pm <- pm %>% mutate(significance_line = as.factor(if_else(!!sym(modx) %in% insignificant_groups, "insignificant", "significant")))
   }
 
   if(verbose){
